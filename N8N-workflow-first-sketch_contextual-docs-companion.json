@@ -1,0 +1,539 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-docs-companion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "dec6fe76-46fc-44a0-a1ba-fcc2f507e767",
+      "name": "Documentation Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1320,
+        120
+      ],
+      "webhookId": "ai-docs-companion"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and structure the incoming query\nconst query = $input.first().json.body.query || '';\nconst currentPage = $input.first().json.body.currentPage || '';\nconst sessionId = $input.first().json.body.sessionId || 'anonymous';\nconst userAgent = $input.first().json.headers['user-agent'] || '';\n\n// Basic context extraction\nconst hasCodeSnippet = /```|`/.test(query);\nconst hasErrorMessage = /error|failed|broken|not working/i.test(query);\nconst questionWords = ['how', 'what', 'why', 'when', 'where', 'which'];\nconst hasQuestion = questionWords.some(word => query.toLowerCase().includes(word));\n\n// Blockchain domain detection\nconst blockchainTerms = {\n  defi: ['defi', 'liquidity', 'yield', 'farming', 'swap', 'pool', 'token'],\n  nft: ['nft', 'token', 'metadata', 'marketplace', 'mint', 'collection'],\n  infrastructure: ['node', 'validator', 'consensus', 'block', 'network', 'deployment']\n};\n\nlet detectedDomain = 'general';\nfor (const [domain, terms] of Object.entries(blockchainTerms)) {\n  if (terms.some(term => query.toLowerCase().includes(term))) {\n    detectedDomain = domain;\n    break;\n  }\n}\n\n// Experience level detection\nlet experienceLevel = 'intermediate';\nif (/beginner|new|start|first time|hello/i.test(query)) {\n  experienceLevel = 'novice';\n} else if (/advanced|optimize|performance|architecture|scalability/i.test(query)) {\n  experienceLevel = 'expert';\n}\n\n// Intent classification\nlet intent = 'general';\nif (hasErrorMessage) {\n  intent = 'troubleshooting';\n} else if (/install|setup|configure|deploy/i.test(query)) {\n  intent = 'implementation';\n} else if (/what is|explain|understand|concept/i.test(query)) {\n  intent = 'learning';\n}\n\nreturn {\n  structuredQuery: {\n    originalQuery: query,\n    currentPage: currentPage,\n    sessionId: sessionId,\n    contextSignals: {\n      hasCode: hasCodeSnippet,\n      hasError: hasErrorMessage,\n      isQuestion: hasQuestion,\n      domain: detectedDomain,\n      experienceLevel: experienceLevel,\n      intent: intent,\n      userAgent: userAgent\n    }\n  }\n};"
+      },
+      "id": "3e0afb1a-c93c-4a25-844f-b57d75035bd6",
+      "name": "Query Context Processor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1100,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.yourapp.com/user-context/{{ $json.structuredQuery.sessionId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "8615ff88-c425-44eb-8e41-e88e5ac0c469",
+      "name": "Fetch User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -880,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.yourapp.com/session-history/{{ $json.structuredQuery.sessionId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e71304b5-5e17-45ad-a6ed-dab9130a132d",
+      "name": "Session History Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -880,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.yourapp.com/content-graph/{{ $json.structuredQuery.currentPage }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "8d92c422-40c6-4ebb-860c-db03bcdf8f4e",
+      "name": "Content Relationship Mapping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "68cf41bb-18bb-4377-a91a-0db06ee6d62c",
+      "name": "Merge Context Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        -660,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Synthesize all context data and determine interaction pattern\nconst queryData = $input.first().json.structuredQuery;\nconst userProfile = $input.first().json.userProfile || {};\nconst sessionHistory = $input.first().json.sessionHistory || {};\nconst contentRelations = $input.first().json.contentRelations || {};\n\n// Determine interaction pattern based on context synthesis\nlet interactionPattern = 'efficient-consultant'; // default\n\n// Pattern decision logic\nif (queryData.contextSignals.intent === 'learning' && \n    queryData.contextSignals.experienceLevel === 'novice') {\n  interactionPattern = 'socratic-guide';\n} else if (queryData.contextSignals.intent === 'troubleshooting' || \n           queryData.contextSignals.hasError) {\n  interactionPattern = 'debugging-partner';\n} else if (queryData.contextSignals.experienceLevel === 'expert' && \n           sessionHistory.queryCount > 5) {\n  interactionPattern = 'efficient-consultant';\n}\n\n// Enhanced context for content assembly\nconst assemblyContext = {\n  ...queryData,\n  interactionPattern: interactionPattern,\n  userPreferences: userProfile.preferences || {},\n  conversationHistory: sessionHistory.recentQueries || [],\n  relatedContent: contentRelations.suggestions || [],\n  synthesizedContext: {\n    cognitiveMode: queryData.contextSignals.experienceLevel,\n    communicationStyle: interactionPattern,\n    domainExpertise: queryData.contextSignals.domain,\n    urgencyLevel: queryData.contextSignals.hasError ? 'high' : 'normal'\n  }\n};\n\nreturn { assemblyContext };"
+      },
+      "id": "7d3cb3d3-f966-4dbc-8983-bacc06b12688",
+      "name": "Interaction Pattern Selector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "socratic-guide",
+              "leftValue": "={{ $json.assemblyContext.interactionPattern }}",
+              "rightValue": "socratic-guide",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "debugging-partner",
+              "leftValue": "={{ $json.assemblyContext.interactionPattern }}",
+              "rightValue": "debugging-partner",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1e1f8785-5572-4bb3-8588-d09bdd12e532",
+      "name": "Route to Pattern Workflow",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Socratic Guide Pattern - Questions that lead to understanding\nconst context = $input.first().json.assemblyContext;\nconst query = context.originalQuery;\n\n// Generate leading questions and conceptual explanations\nconst guidingQuestions = [\n  \"What do you think would happen if we approached this differently?\",\n  \"How does this concept relate to what you already know about blockchain?\",\n  \"What specific outcome are you trying to achieve?\"\n];\n\nconst responseFramework = {\n  approachStyle: 'conceptual-first',\n  responseStructure: {\n    openingQuestion: guidingQuestions[Math.floor(Math.random() * guidingQuestions.length)],\n    conceptualExplanation: true,\n    progressiveDisclosure: true,\n    followUpQuestions: true\n  },\n  contentMods: {\n    includeAnalogies: true,\n    stepByStepBreakdown: true,\n    encouragement: true\n  }\n};\n\nreturn { \n  patternResponse: responseFramework,\n  originalContext: context\n};"
+      },
+      "id": "c2c559a2-b591-4aaf-8557-2aecabd06186",
+      "name": "Socratic Guide Sub-Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Debugging Partner Pattern - Collaborative investigation\nconst context = $input.first().json.assemblyContext;\nconst query = context.originalQuery;\n\n// Generate diagnostic approach\nconst diagnosticSteps = [\n  \"Let's trace through this step by step\",\n  \"What's the first thing that happens when you run this?\",\n  \"Can you share the exact error message?\",\n  \"Let's check the most common causes\"\n];\n\nconst responseFramework = {\n  approachStyle: 'problem-solving-first',\n  responseStructure: {\n    immediateAction: true,\n    diagnosticQuestions: true,\n    systematicInvestigation: true,\n    collaborativeTone: true\n  },\n  contentMods: {\n    errorPatternMatching: true,\n    quickFixes: true,\n    escalationPath: true,\n    reassurance: true\n  }\n};\n\nreturn { \n  patternResponse: responseFramework,\n  originalContext: context\n};"
+      },
+      "id": "c379d105-89f8-45d1-a601-6a12d3d2022b",
+      "name": "Debugging Partner Sub-Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Efficient Consultant Pattern - Direct, actionable guidance\nconst context = $input.first().json.assemblyContext;\nconst query = context.originalQuery;\n\n// Generate direct, actionable response framework\nconst responseFramework = {\n  approachStyle: 'solution-first',\n  responseStructure: {\n    directAnswer: true,\n    codeExamples: true,\n    bestPractices: true,\n    minimalExplanation: true\n  },\n  contentMods: {\n    bulletPoints: true,\n    implementationFocus: true,\n    timeEfficient: true,\n    optionalDetails: true\n  }\n};\n\nreturn { \n  patternResponse: responseFramework,\n  originalContext: context\n};"
+      },
+      "id": "af95582e-a4f0-4889-8601-27cc483cee7f",
+      "name": "Efficient Consultant Sub-Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "4425830c-4443-475b-8500-8e2735a7424f",
+      "name": "Merge Pattern Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        220,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.yourapp.com/content-atoms",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.originalContext.originalQuery }}"
+            },
+            {
+              "name": "domain",
+              "value": "={{ $json.originalContext.contextSignals.domain }}"
+            },
+            {
+              "name": "currentPage",
+              "value": "={{ $json.originalContext.currentPage }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "d554e605-d382-4541-896d-443da4bd1e86",
+      "name": "Retrieve Content Atoms",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        440,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "message",
+        "requestOptions": {}
+      },
+      "id": "8ec4045e-520b-4c8a-8d7f-d9c09730efeb",
+      "name": "AI Content Assembly Engine",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        660,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.yourapp.com/interaction-logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "sessionId",
+              "value": "={{ $json.originalContext.sessionId }}"
+            },
+            {
+              "name": "query",
+              "value": "={{ $json.originalContext.originalQuery }}"
+            },
+            {
+              "name": "interactionPattern",
+              "value": "={{ $json.originalContext.interactionPattern }}"
+            },
+            {
+              "name": "contextSignals",
+              "value": "={{ JSON.stringify($json.originalContext.contextSignals) }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "15f91208-89d9-424b-8d55-cf406b08dde7",
+      "name": "Log Interaction for Learning",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        880,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"response\": {{ JSON.stringify($json.message.content) }},\n  \"metadata\": {\n    \"interactionPattern\": {{ JSON.stringify($json.originalContext.interactionPattern) }},\n    \"contextSignals\": {{ JSON.stringify($json.originalContext.contextSignals) }},\n    \"timestamp\": {{ JSON.stringify(new Date().toISOString()) }}\n  }\n}",
+        "options": {}
+      },
+      "id": "dc0258f5-0bf4-4f5c-9e8e-5245c5e4bfdd",
+      "name": "Send Response to User",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        880,
+        120
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Documentation Query Webhook": {
+      "main": [
+        [
+          {
+            "node": "Query Context Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Context Processor": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Profile",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Session History Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Content Relationship Mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Profile": {
+      "main": [
+        [
+          {
+            "node": "Merge Context Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session History Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge Context Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Context Data": {
+      "main": [
+        [
+          {
+            "node": "Interaction Pattern Selector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interaction Pattern Selector": {
+      "main": [
+        [
+          {
+            "node": "Route to Pattern Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Pattern Workflow": {
+      "main": [
+        [
+          {
+            "node": "Socratic Guide Sub-Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Debugging Partner Sub-Workflow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Efficient Consultant Sub-Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Socratic Guide Sub-Workflow": {
+      "main": [
+        [
+          {
+            "node": "Merge Pattern Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Debugging Partner Sub-Workflow": {
+      "main": [
+        [
+          {
+            "node": "Merge Pattern Responses",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Pattern Responses": {
+      "main": [
+        [
+          {
+            "node": "Retrieve Content Atoms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Content Atoms": {
+      "main": [
+        [
+          {
+            "node": "AI Content Assembly Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Content Assembly Engine": {
+      "main": [
+        [
+          {
+            "node": "Send Response to User",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Interaction for Learning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Relationship Mapping": {
+      "main": [
+        [
+          {
+            "node": "Merge Context Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Efficient Consultant Sub-Workflow": {
+      "main": [
+        [
+          {
+            "node": "Merge Pattern Responses",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "dc7887ea-9fe4-4a34-bfe5-6e9ddd86301a",
+  "meta": {
+    "instanceId": "a22e71cdb560495643fedbb1221aae9f76156ae04a6ecd707f40e5d7e73752f3"
+  },
+  "id": "pmuM1zUGmeRG9zNo",
+  "tags": []
+}
